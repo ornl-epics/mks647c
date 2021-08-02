@@ -1,0 +1,64 @@
+Terminator = CR;
+LockTimeout = 10000;
+ReplyTimeout = 1000;
+ReadTimeout = 1000;
+WriteTimeout = 1000;
+ExtraInput = ignore;
+InTerminator = CR;
+
+
+
+##########################################################
+##MKS647C Reads
+##########################################################
+
+IDN{
+    out "IDN"; in "%39c"
+}
+
+ReadFlow{
+    out "FL \$1"; in "%f"
+}
+
+ReadSETP{
+    out "FS \$1 R"; in "%f"
+}
+
+ReadGCFactor{
+    out "GC \$1 R"; in "%f"
+}
+
+
+
+
+
+###########################################################
+#Writes
+###########################################################
+setSETP {
+   out "FS \$1 %i";
+}
+
+
+setRANGE {
+   out "RA \$1 %i";
+}
+
+CloseValve{
+    out "OF \$1 %i"; in ""
+}
+
+
+OpenValve{
+    out "ON \$1 %i"; in ""
+}
+
+#Must be a integer to prevent sending trailing zeros. 
+SetGCFactor{
+    out "GC \$1 %i"; in ""
+}
+
+
+
+
+

@@ -1,0 +1,930 @@
+#get IDN from MKS
+###########################################
+record(stringin, "$(S):$(TA):$(DN):IDN") {
+  field(DESC, "Read Identification")
+  field(PINI, "YES")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto IDN mks647c1")
+  field(SCAN, "Passive")
+  info(archive, "Monitor, 00:00:01, VAL")
+}
+
+##########################################
+#Open Main Valve
+##########################################
+record(bi, "$(S):$(TA):$(DN):OpenMain") {
+  field(DESC, "Open Main Valve")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto OpenValve(0) mks647c1")
+  info(archive, "Monitor, 00:00:01, VAL")
+  field(PINI, "YES")
+}
+
+###########################################
+#Close MKS Valve
+###########################################
+
+record(bi, "$(S):$(TA):$(DN):ACloseValve") {
+  field(DESC, "Close valve A")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto CloseValve(1) mks647c1")
+  info(archive, "Monitor, 00:00:01, VAL")
+}
+
+###########################################
+#Open MKS Valve notice PINI so it opens the valve on start. 
+###########################################
+record(bi, "$(S):$(TA):$(DN):AOpenValve") {
+  field(DESC, "Open Valve")
+  field(PINI, "YES")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto OpenValve(1) mks647c1")
+  info(archive, "Monitor, 00:00:01, VAL")
+}
+
+###########################################
+#Flow Set Point Read, write  
+#for range 6 or 100 sccm multiply *100--write
+#for range 8 or 500 sccm multiply *2  --write
+#for range 6 or 100 sccm divide by 10 --read 
+#for range 8 or 500 sccm divide by 2  --read
+###########################################
+#write setpoint
+record(ai, "$(S):$(TA):$(DN):ASetPointWrite") {
+  field(DESC, "Write SetPoint A")
+  field(EGU, "SCCM")
+  field(HOPR, "100")
+  field(LOPR, "0")
+  field(PREC, "0")
+  field(ADEL, "1")
+  field (FLNK, "$(S):$(TA):$(DN):ASetPointWriteRaw")
+  info(archive, "Monitor, 00:00:01, VAL")
+  info(autosaveFields, "VAL")
+}
+
+
+
+record(calcout, "$(S):$(TA):$(DN):ASetPointWriteRaw")
+{
+    field(DESC, "Write Set Point A * 100")
+    field(INPA, "$(S):$(TA):$(DN):ASetPointWrite")
+    field(CALC, "A*10")
+    field(PREC, "0")
+    field(ADEL, "1")
+    field(DTYP, "stream")
+    field(OUT, "@mks647c.proto setSETP(1) mks647c1")
+    info(archive, "Monitor, 00:00:01, VAL")
+    field (FLNK, "$(S):$(TA):$(DN):AOpenValve")
+}
+
+#read setpoint
+
+record(ai, "$(S):$(TA):$(DN):ASetPointReadRaw") {
+  field(DESC, "Read SetPoint A Raw")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto ReadSETP(1) mks647c1")
+  field(SCAN, "5 second")
+  field(PREC, "0")
+  field(ADEL, "1")
+  info(archive, "Monitor, 00:00:01, VAL")
+
+}
+
+
+record(calc, "$(S):$(TA):$(DN):ASetPointRead")
+{
+    field(DESC, "SetPoint A /100 read")
+    field(EGU, "SCCM")
+    field(INPA, "$(S):$(TA):$(DN):ASetPointReadRaw CPP")
+    field(CALC, "A/10")
+    field(PINI, "YES")
+    field(PREC, "0")
+    field(ADEL, "1")
+    info(archive, "Monitor, 00:00:01, VAL")
+}
+
+
+
+###########################################
+##Ranges for 100 is RA1 6 1=First controller 6 =100sccm 8=500sccm
+#a=100 b=500 c=100 d=500
+############################################
+record(ao, "$(S):$(TA):$(DN):AGasRange") {
+  field(DESC, "Write Gas Range")
+  field(DTYP, "stream")
+  field(OUT, "@mks647c.proto setRANGE(1) mks647c1")
+  field(PREC, "0")
+  field(HOPR, "8")
+  field(LOPR, "6")
+  field(PINI, "YES")
+  field(VAL, "6")
+  info(archive, "Monitor, 00:00:01, VAL")
+  info(autosaveFields, "VAL")
+}
+
+
+
+###########################################
+#Read actual flow no formula 
+###########################################
+
+record(ai, "$(S):$(TA):$(DN):AGasFlowR") {
+  field(DESC, "Read A Flow")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto ReadFlow(1) mks647c1")
+  field(SCAN, "1 second")
+  field(PREC, "2")
+  field(EGU, "SCCM")
+  field(ADEL, "0.1")
+  info(archive, "Monitor, 00:00:01, VAL")
+  field(HIHI, "5")
+  field(LOLO, "-5")
+  field(HHSV, "MAJOR")
+  field(LLSV, "MAJOR")
+
+}
+
+record(calc, "$(S):$(TA):$(DN):AGasFlow")
+{
+    field(DESC, "Gas correction read")
+    field(EGU, "SCCM")
+    field(INPA, "$(S):$(TA):$(DN):AGasFlowR CPP")
+    field(CALC, "A/10")
+    field(PINI, "YES")
+    field(PREC, "2")
+    info(archive, "Monitor, 00:00:01, VAL")
+    field(HIHI, "5")
+    field(LOLO, "-5")
+    field(HHSV, "MAJOR")
+    field(LLSV, "MAJOR")
+}
+
+
+
+
+#########################################
+#setting and reading correction factors Raw and formatted
+#########################################
+#Read gas correction factor
+record(ai, "$(S):$(TA):$(DN):AGasCorrectionReadRaw") {
+  field(DESC, "Read Gas Correction Factor Raw")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto ReadGCFactor(1) mks647c1")
+  field(SCAN, "5 second")
+  field(PREC, "2")
+  info(archive, "Monitor, 00:00:01, VAL")
+
+}
+
+
+record(calc, "$(S):$(TA):$(DN):AGasCorrectionRead")
+{
+    field(DESC, "Gas correction read") 
+    field(EGU, "CorFac")
+    field(INPA, "$(S):$(TA):$(DN):AGasCorrectionReadRaw CPP")
+    field(CALC, "A/100")
+    field(PINI, "YES")
+    field(PREC, "2")
+    info(archive, "Monitor, 00:00:01, VAL")
+}
+
+#Write gas correction factor
+
+record(ai, "$(S):$(TA):$(DN):AGasCorrectionWrite") {
+  field(DESC, "Write Gas Correction Factor")
+  field(EGU, "CorFac")
+  field(HOPR, "1.8")
+  field(LOPR, "0.10")
+  field(PREC, "2")
+  field (FLNK, "$(S):$(TA):$(DN):AGasCorrectionWriteRaw")  
+  info(archive, "Monitor, 00:00:01, VAL")
+  info(autosaveFields, "VAL")
+}
+
+
+
+record(calcout, "$(S):$(TA):$(DN):AGasCorrectionWriteRaw")
+{   
+    field(DESC, "Write Gas Correction Factor *100")
+    field(INPA, "$(S):$(TA):$(DN):AGasCorrectionWrite")
+    field(CALC, "A*100")
+    field(PREC, "0")
+    field(ADEL, "1")
+    info(archive, "Monitor, 00:00:01, VAL")
+    field(DTYP, "stream")
+    field(OUT, "@mks647c.proto SetGCFactor(1) mks647c1")
+
+}
+
+record(mbbo, "$(S):$(TA):$(DN):AGasCorreTableWrite")
+{
+  field(DESC, "Write Gas Correction Table")
+  field(DTYP, "stream")
+  field(OUT, "@mks647c.proto SetGCFactor(1) mks647c1")
+  field(NOBT, "15")
+  field(ZRVL, "100")
+  field(ONVL, "101")
+  field(TWVL, "72")
+  field(THVL, "100")
+  field(FRVL, "145")
+  field(FVVL, "100")
+  field(ZRST, "Manual")
+  field(ONST, "H2 1.01")
+  field(TWST, "CH4 0.72")
+  field(THST, "CO 1.00")
+  field(FRST, "He 1.45")
+  field(FVST, "N2 1.00")
+  info(archive, "Monitor, 00:00:01, VAL")
+  info(autosaveFields, "VAL")
+}
+
+
+
+
+
+########################################################################################################
+#B MKS
+########################################################################################################
+
+###########################################
+#Close MKS Valve
+###########################################
+
+record(bi, "$(S):$(TA):$(DN):BCloseValve") {
+  field(DESC, "Close valve B")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto CloseValve(2) mks647c1")
+  info(archive, "Monitor, 00:00:01, VAL")
+}
+
+###########################################
+#Open MKS Valve
+###########################################
+record(bi, "$(S):$(TA):$(DN):BOpenValve") {
+  field(DESC, "Open Valve")
+  field(PINI, "YES")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto OpenValve(2) mks647c1")
+  info(archive, "Monitor, 00:00:01, VAL")
+}
+
+###########################################
+#Flow Set Point Read, write  
+#for range 6 or 100 sccm multiply *100--write
+#for range 8 or 500 sccm multiply *2  --write
+#for range 6 or 100 sccm divide by 10 --read 
+#for range 8 or 500 sccm divide by 2  --read
+###########################################
+#write setpoint
+record(ai, "$(S):$(TA):$(DN):BSetPointWrite") {
+  field(DESC, "Write SetPoint B")
+  field(EGU, "SCCM")
+  field(HOPR, "500")
+  field(LOPR, "0")
+  field(PREC, "0")
+  field(ADEL, "1")
+  field (FLNK, "$(S):$(TA):$(DN):BSetPointWriteRaw")
+  info(archive, "Monitor, 00:00:01, VAL")
+  info(autosaveFields, "VAL")
+}
+
+
+
+record(calcout, "$(S):$(TA):$(DN):BSetPointWriteRaw")
+{
+    field(DESC, "Write Set Point B * 2")
+    field(INPA, "$(S):$(TA):$(DN):BSetPointWrite")
+    field(CALC, "A*2")
+    field(PREC, "0")
+    field(ADEL, "1")
+    field(DTYP, "stream")
+    field(OUT, "@mks647c.proto setSETP(2) mks647c1")
+    info(archive, "Monitor, 00:00:01, VAL")
+    field (FLNK, "$(S):$(TA):$(DN):BOpenValve")
+
+}
+
+
+#read setpoint
+
+record(ai, "$(S):$(TA):$(DN):BSetPointReadRaw") {
+  field(DESC, "Read SetPoint B Raw")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto ReadSETP(2) mks647c1")
+  field(SCAN, "5 second")
+  field(PREC, "0")
+  field(ADEL, "1")
+  info(archive, "Monitor, 00:00:01, VAL")
+
+}
+
+
+record(calc, "$(S):$(TA):$(DN):BSetPointRead")
+{
+    field(DESC, "SetPoint B /2 read")
+    field(EGU, "SCCM")
+    field(INPA, "$(S):$(TA):$(DN):BSetPointReadRaw CPP")
+    field(CALC, "A/2")
+    field(PINI, "YES")
+    field(PREC, "0")
+    field(ADEL, "1")
+    info(archive, "Monitor, 00:00:01, VAL")
+}
+
+
+
+###########################################
+##Ranges for 100 is RA1 6 1=First controller 6 =100sccm 8=500sccm
+#a=100 b=500 c=100 d=500
+############################################
+
+
+
+record(ao, "$(S):$(TA):$(DN):BGasRange") {
+  field(DESC, "Write Gas Range")
+  field(DTYP, "stream")
+  field(OUT, "@mks647c.proto setRANGE(2) mks647c1")
+  field(PREC, "0")
+  field(HOPR, "8")
+  field(LOPR, "6")
+  field(PINI, "YES")
+  field(VAL, "8")
+  info(archive, "Monitor, 00:00:01, VAL")
+  info(autosaveFields, "VAL")
+}
+
+###########################################
+#Read actual flow no formula 
+###########################################
+
+record(ai, "$(S):$(TA):$(DN):BGasFlowR") {
+  field(DESC, "Read B Flow")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto ReadFlow(2) mks647c1")
+  field(SCAN, "1 second")
+  field(PREC, "2")
+  field(EGU, "SCCM")
+  field(ADEL, "0.1")
+  info(archive, "Monitor, 00:00:01, VAL")
+  field(HIHI, "5")
+  field(LOLO, "-5")
+  field(HHSV, "MAJOR")
+  field(LLSV, "MAJOR")
+
+}
+
+record(calc, "$(S):$(TA):$(DN):BGasFlow")
+{
+    field(DESC, "Gas correction read")
+    field(EGU, "SCCM")
+    field(INPA, "$(S):$(TA):$(DN):BGasFlowR CPP")
+    field(CALC, "A/2")
+    field(PINI, "YES")
+    field(PREC, "2")
+    info(archive, "Monitor, 00:00:01, VAL")
+    field(HIHI, "5")
+    field(LOLO, "-5")
+    field(HHSV, "MAJOR")
+    field(LLSV, "MAJOR")
+}
+
+
+
+#########################################
+#setting and reading correction factors Raw and formatted
+#########################################
+#Read gas correction factor
+record(ai, "$(S):$(TA):$(DN):BGasCorrectionReadRaw") {
+  field(DESC, "Read Gas Correction Factor Raw")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto ReadGCFactor(2) mks647c1")
+  field(SCAN, "5 second")
+  field(PREC, "2")
+  info(archive, "Monitor, 00:00:01, VAL")
+
+}
+
+
+record(calc, "$(S):$(TA):$(DN):BGasCorrectionRead")
+{
+    field(DESC, "Gas correction read") 
+    field(EGU, "CorFac")
+    field(INPA, "$(S):$(TA):$(DN):BGasCorrectionReadRaw CPP")
+    field(CALC, "A/100")
+    field(PINI, "YES")
+    field(PREC, "2")
+    info(archive, "Monitor, 00:00:01, VAL")
+}
+
+#Write gas correction factor
+
+record(ai, "$(S):$(TA):$(DN):BGasCorrectionWrite") {
+  field(DESC, "Write Gas Correction Factor")
+  field(EGU, "CorFac")
+  field(HOPR, "1.8")
+  field(LOPR, "0.10")
+  field(PREC, "2")
+  field (FLNK, "$(S):$(TA):$(DN):BGasCorrectionWriteRaw")  
+  info(archive, "Monitor, 00:00:01, VAL")
+  info(autosaveFields, "VAL")
+}
+
+
+
+record(calcout, "$(S):$(TA):$(DN):BGasCorrectionWriteRaw")
+{   
+    field(DESC, "Write Gas Correction Factor *100")
+    field(INPA, "$(S):$(TA):$(DN):BGasCorrectionWrite")
+    field(CALC, "A*100")
+    field(PREC, "0")
+    field(DTYP, "stream")
+    field(OUT, "@mks647c.proto SetGCFactor(2) mks647c1")
+    info(archive, "Monitor, 00:00:01, VAL")
+}
+
+
+
+record(mbbo, "$(S):$(TA):$(DN):BGasCorreTableWrite")
+{
+  field(DESC, "Write Gas Correction Table")
+  field(DTYP, "stream")
+  field(OUT, "@mks647c.proto SetGCFactor(2) mks647c1")
+  field(NOBT, "15")
+  field(ZRVL, "100")
+  field(ONVL, "101")
+  field(TWVL, "72")
+  field(THVL, "100")
+  field(FRVL, "145")
+  field(FVVL, "100")
+  field(ZRST, "Manual")
+  field(ONST, "H2 1.01")
+  field(TWST, "CH4 0.72")
+  field(THST, "CO 1.00")
+  field(FRST, "He 1.45")
+  field(FVST, "N2 1.00")
+  info(archive, "Monitor, 00:00:01, VAL")
+  info(autosaveFields, "VAL")
+}
+
+
+
+
+########################################################################################################
+#C MKS
+########################################################################################################
+
+###########################################
+#Close MKS Valve
+###########################################
+
+record(bi, "$(S):$(TA):$(DN):CCloseValve") {
+  field(DESC, "Close valve C")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto CloseValve(3) mks647c1")
+  info(archive, "Monitor, 00:00:01, VAL")
+}
+
+###########################################
+#Open MKS Valve
+###########################################
+record(bi, "$(S):$(TA):$(DN):COpenValve") {
+  field(DESC, "Open Valve")
+  field(PINI, "YES")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto OpenValve(3) mks647c1")
+  info(archive, "Monitor, 00:00:01, VAL")
+}
+
+###########################################
+#Flow Set Point Read, write  
+#for range 6 or 100 sccm multiply *100--write
+#for range 8 or 500 sccm multiply *2  --write
+#for range 6 or 100 sccm divide by 10 --read 
+#for range 8 or 500 sccm divide by 2  --read
+###########################################
+#write setpoint
+record(ai, "$(S):$(TA):$(DN):CSetPointWrite") {
+  field(DESC, "Write SetPoint C")
+  field(EGU, "SCCM")
+  field(HOPR, "100")
+  field(LOPR, "0")
+  field(PREC, "0")
+  field(ADEL, "1")
+  field (FLNK, "$(S):$(TA):$(DN):CSetPointWriteRaw")
+  info(archive, "Monitor, 00:00:01, VAL")
+  info(autosaveFields, "VAL")
+}
+
+
+
+record(calcout, "$(S):$(TA):$(DN):CSetPointWriteRaw")
+{
+    field(DESC, "Write Set Point C * 10")
+    field(INPA, "$(S):$(TA):$(DN):CSetPointWrite")
+    field(CALC, "A*10")
+    field(PREC, "0")
+    field(ADEL, "1")
+    field(DTYP, "stream")
+    field(OUT, "@mks647c.proto setSETP(3) mks647c1")
+    info(archive, "Monitor, 00:00:01, VAL")
+    field (FLNK, "$(S):$(TA):$(DN):COpenValve")
+
+}
+
+
+#read setpoint
+
+record(ai, "$(S):$(TA):$(DN):CSetPointReadRaw") {
+  field(DESC, "Read SetPoint C Raw")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto ReadSETP(3) mks647c1")
+  field(SCAN, "5 second")
+  field(PREC, "0")
+  field(ADEL, "1")
+  info(archive, "Monitor, 00:00:01, VAL")
+
+}
+
+
+record(calc, "$(S):$(TA):$(DN):CSetPointRead")
+{
+    field(DESC, "SetPoint C /10 read")
+    field(EGU, "SCCM")
+    field(INPA, "$(S):$(TA):$(DN):CSetPointReadRaw CPP")
+    field(CALC, "A/10")
+    field(PINI, "YES")
+    field(PREC, "0")
+    field(ADEL, "1")
+    info(archive, "Monitor, 00:00:01, VAL")
+}
+
+
+
+###########################################
+##Ranges for 100 is RA1 6 1=First controller 6 =100sccm 8=500sccm
+#a=100 b=500 c=100 d=500
+############################################
+
+
+
+record(ao, "$(S):$(TA):$(DN):CGasRange") {
+  field(DESC, "Write Gas Range")
+  field(DTYP, "stream")
+  field(OUT, "@mks647c.proto setRANGE(3) mks647c1")
+  field(PREC, "0")
+  field(HOPR, "8")
+  field(LOPR, "6")
+  field(PINI, "YES")
+  field(VAL, "6")  
+  info(archive, "Monitor, 00:00:01, VAL")
+  info(autosaveFields, "VAL")
+}
+
+###########################################
+#Read actual flow no formula 
+###########################################
+
+record(ai, "$(S):$(TA):$(DN):CGasFlowR") {
+  field(DESC, "Read A Flow")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto ReadFlow(3) mks647c1")
+  field(SCAN, "1 second")
+  field(PREC, "2")
+  field(EGU, "SCCM")
+  field(ADEL, "0.1")
+  info(archive, "Monitor, 00:00:01, VAL")
+  field(HIHI, "5")
+  field(LOLO, "-5")
+  field(HHSV, "MAJOR")
+  field(LLSV, "MAJOR")
+
+}
+
+record(calc, "$(S):$(TA):$(DN):CGasFlow")
+{
+    field(DESC, "Gas correction read")
+    field(EGU, "SCCM")
+    field(INPA, "$(S):$(TA):$(DN):CGasFlowR CPP")
+    field(CALC, "A/10")
+    field(PINI, "YES")
+    field(PREC, "10")
+    info(archive, "Monitor, 00:00:01, VAL")
+    field(HIHI, "5")
+    field(LOLO, "-5")
+    field(HHSV, "MAJOR")
+    field(LLSV, "MAJOR")
+}
+
+
+
+#########################################
+#setting and reading correction factors Raw and formatted
+#########################################
+#Read gas correction factor
+record(ai, "$(S):$(TA):$(DN):CGasCorrectionReadRaw") {
+  field(DESC, "Read Gas Correction Factor Raw")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto ReadGCFactor(3) mks647c1")
+  field(SCAN, "5 second")
+  field(PREC, "2")
+  info(archive, "Monitor, 00:00:01, VAL")
+
+}
+
+
+record(calc, "$(S):$(TA):$(DN):CGasCorrectionRead")
+{
+    field(DESC, "Gas correction read") 
+    field(EGU, "CorFac")
+    field(INPA, "$(S):$(TA):$(DN):CGasCorrectionReadRaw CPP")
+    field(CALC, "A/100")
+    field(PINI, "YES")
+    field(PREC, "2")
+    info(archive, "Monitor, 00:00:01, VAL")
+}
+
+#Write gas correction factor
+
+record(ai, "$(S):$(TA):$(DN):CGasCorrectionWrite") {
+  field(DESC, "Write Gas Correction Factor")
+  field(EGU, "CorFac")
+  field(HOPR, "1.80")
+  field(LOPR, "0.10")
+  field(PREC, "2")
+  field (FLNK, "$(S):$(TA):$(DN):CGasCorrectionWriteRaw")  
+  info(archive, "Monitor, 00:00:01, VAL")
+  info(autosaveFields, "VAL")
+}
+
+
+
+record(calcout, "$(S):$(TA):$(DN):CGasCorrectionWriteRaw")
+{   
+    field(DESC, "Write Gas Correction Factor *100")
+    field(INPA, "$(S):$(TA):$(DN):CGasCorrectionWrite")
+    field(CALC, "A*100")
+    field(PREC, "2")
+    field(DTYP, "stream")
+    field(OUT, "@mks647c.proto SetGCFactor(3) mks647c1")
+    info(archive, "Monitor, 00:00:01, VAL")
+}
+
+
+
+record(mbbo, "$(S):$(TA):$(DN):CGasCorreTableWrite")
+{
+  field(DESC, "Write Gas Correction Table")
+  field(DTYP, "stream")
+  field(OUT, "@mks647c.proto SetGCFactor(3) mks647c1")
+  field(NOBT, "15")
+  field(ZRVL, "100")
+  field(ONVL, "101")
+  field(TWVL, "72")
+  field(THVL, "100")
+  field(FRVL, "145")
+  field(FVVL, "100")
+  field(ZRST, "Manual")
+  field(ONST, "H2 1.01")
+  field(TWST, "CH4 0.72")
+  field(THST, "CO 1.00")
+  field(FRST, "He 1.45")
+  field(FVST, "N2 1.00")
+  info(archive, "Monitor, 00:00:01, VAL")
+  info(autosaveFields, "VAL")
+}
+
+
+
+
+
+########################################################################################################
+#D MKS
+########################################################################################################
+
+###########################################
+#Close MKS Valve
+###########################################
+
+record(bi, "$(S):$(TA):$(DN):DCloseValve") {
+  field(DESC, "Close valve D")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto CloseValve(4) mks647c1")
+  info(archive, "Monitor, 00:00:01, VAL")
+}
+
+###########################################
+#Open MKS Valve
+###########################################
+record(bi, "$(S):$(TA):$(DN):DOpenValve") {
+  field(DESC, "Open Valve")
+  field(PINI, "YES")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto OpenValve(4) mks647c1")
+  info(archive, "Monitor, 00:00:01, VAL")
+}
+
+###########################################
+#Flow Set Point Read, write  
+#for range 6 or 100 sccm multiply *100--write
+#for range 8 or 500 sccm multiply *2  --write
+#for range 6 or 100 sccm divide by 10 --read 
+#for range 8 or 500 sccm divide by 2  --read
+###########################################
+#write setpoint
+record(ai, "$(S):$(TA):$(DN):DSetPointWrite") {
+  field(DESC, "Write SetPoint D")
+  field(EGU, "SCCM")
+  field(HOPR, "500")
+  field(LOPR, "0")
+  field(PREC, "0")
+  field(ADEL, "1")
+  field (FLNK, "$(S):$(TA):$(DN):DSetPointWriteRaw")
+  info(archive, "Monitor, 00:00:01, VAL")
+  info(autosaveFields, "VAL")
+}
+
+
+
+record(calcout, "$(S):$(TA):$(DN):DSetPointWriteRaw")
+{
+    field(DESC, "Write Set Point D * 2")
+    field(INPA, "$(S):$(TA):$(DN):DSetPointWrite")
+    field(CALC, "A*2")
+    field(PREC, "0")
+    field(ADEL, "1")
+    field(DTYP, "stream")
+    field(OUT, "@mks647c.proto setSETP(4) mks647c1")
+    info(archive, "Monitor, 00:00:01, VAL")
+    field (FLNK, "$(S):$(TA):$(DN):DOpenValve")
+
+}
+
+
+#read setpoint
+
+record(ai, "$(S):$(TA):$(DN):DSetPointReadRaw") {
+  field(DESC, "Read SetPoint D Raw")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto ReadSETP(4) mks647c1")
+  field(SCAN, "5 second")
+  field(PREC, "0")
+  field(ADEL, "1")
+  info(archive, "Monitor, 00:00:01, VAL")
+
+}
+
+
+record(calc, "$(S):$(TA):$(DN):DSetPointRead")
+{
+    field(DESC, "SetPoint D /2 read")
+    field(EGU, "SCCM")
+    field(INPA, "$(S):$(TA):$(DN):DSetPointReadRaw CPP")
+    field(CALC, "A/2")
+    field(PINI, "YES")
+    field(PREC, "0")
+    field(ADEL, "1")
+    info(archive, "Monitor, 00:00:01, VAL")
+}
+
+
+
+###########################################
+##Ranges for 100 is RA1 6 1=First controller 6 =100sccm 8=500sccm
+#a=100 b=500 c=100 d=500
+############################################
+
+
+
+record(ao, "$(S):$(TA):$(DN):DGasRange") {
+  field(DESC, "Write Gas Range")
+  field(DTYP, "stream")
+  field(OUT, "@mks647c.proto setRANGE(4) mks647c1")
+  field(PREC, "0")
+  field(HOPR, "8")
+  field(LOPR, "6")
+  field(PINI, "YES")
+  field(VAL, "8")
+  info(archive, "Monitor, 00:00:01, VAL")
+  info(autosaveFields, "VAL")
+}
+
+###########################################
+#Read actual flow no formula 
+###########################################
+
+record(ai, "$(S):$(TA):$(DN):DGasFlowR") {
+  field(DESC, "Read D Flow")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto ReadFlow(4) mks647c1")
+  field(SCAN, "1 second")
+  field(PREC, "2")
+  field(EGU, "SCCM")
+  field(ADEL, "0.1")
+  info(archive, "Monitor, 00:00:01, VAL")
+  field(HIHI, "5")
+  field(LOLO, "-5")
+  field(HHSV, "MAJOR")
+  field(LLSV, "MAJOR")
+
+}
+
+record(calc, "$(S):$(TA):$(DN):DGasFlow")
+{
+    field(DESC, "Gas correction read")
+    field(EGU, "SCCM")
+    field(INPA, "$(S):$(TA):$(DN):DGasFlowR CPP")
+    field(CALC, "A/2")
+    field(PINI, "YES")
+    field(PREC, "2")
+    info(archive, "Monitor, 00:00:01, VAL")
+    field(HIHI, "5")
+    field(LOLO, "-5")
+    field(HHSV, "MAJOR")
+    field(LLSV, "MAJOR")
+}
+
+
+
+#########################################
+#setting and reading correction factors Raw and formatted
+#########################################
+#Read gas correction factor
+record(ai, "$(S):$(TA):$(DN):DGasCorrectionReadRaw") {
+  field(DESC, "Read Gas Correction Factor Raw")
+  field(DTYP, "stream")
+  field(INP, "@mks647c.proto ReadGCFactor(4) mks647c1")
+  field(SCAN, "5 second")
+  field(PREC, "2")
+  info(archive, "Monitor, 00:00:01, VAL")
+
+}
+
+
+record(calc, "$(S):$(TA):$(DN):DGasCorrectionRead")
+{
+    field(DESC, "Gas correction read") 
+    field(EGU, "CorFac")
+    field(INPA, "$(S):$(TA):$(DN):DGasCorrectionReadRaw CPP")
+    field(CALC, "A/100")
+    field(PINI, "YES")
+    field(PREC, "2")
+    info(archive, "Monitor, 00:00:01, VAL")
+}
+
+#Write gas correction factor
+
+record(ai, "$(S):$(TA):$(DN):DGasCorrectionWrite") {
+  field(DESC, "Write Gas Correction Factor")
+  field(EGU, "CorFac")
+  field(HOPR, "1.80")
+  field(LOPR, "0.10")
+  field(PREC, "2")
+  field (FLNK, "$(S):$(TA):$(DN):DGasCorrectionWriteRaw")  
+  info(archive, "Monitor, 00:00:01, VAL")
+  info(autosaveFields, "VAL")
+}
+
+
+
+record(calcout, "$(S):$(TA):$(DN):DGasCorrectionWriteRaw")
+{   
+    field(DESC, "Write Gas Correction Factor *100")
+    field(INPA, "$(S):$(TA):$(DN):DGasCorrectionWrite")
+    field(CALC, "A*100")
+    field(PREC, "0")
+    field(ADEL, "1")
+    field(DTYP, "stream")
+    field(OUT, "@mks647c.proto SetGCFactor(4) mks647c1")
+    info(archive, "Monitor, 00:00:01, VAL")
+}
+
+
+record(mbbo, "$(S):$(TA):$(DN):DGasCorreTableWrite")
+{
+  field(DESC, "Write Gas Correction Table")
+  field(DTYP, "stream")
+  field(OUT, "@mks647c.proto SetGCFactor(4) mks647c1")
+  field(NOBT, "15")
+  field(ZRVL, "100")
+  field(ONVL, "101")
+  field(TWVL, "72")
+  field(THVL, "100")
+  field(FRVL, "145")
+  field(FVVL, "100")
+  field(ZRST, "Manual")
+  field(ONST, "H2 1.01")
+  field(TWST, "CH4 0.72")
+  field(THST, "CO 1.00")
+  field(FRST, "He 1.45")
+  field(FVST, "N2 1.00")
+  info(archive, "Monitor, 00:00:01, VAL")
+  info(autosaveFields, "VAL")
+}
+
+
+
+
+
+
+
+

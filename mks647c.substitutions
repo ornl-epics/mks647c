@@ -1,0 +1,7 @@
+file mks647c.template
+{
+pattern {S, TA, DN, DT1, DT2}
+        {BL11A, SE, mks647c, MF, PR}
+}
+
+
